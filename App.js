@@ -6,6 +6,8 @@ const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const cors = require('cors');
+const multer = require('multer');
+const path = require('path');
 
 const Mongo_URL = process.env.MONGO_URL;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -31,7 +33,23 @@ mongoose
     });
 
 require('./UserDetails');
+require('./OrcamentoDetails');
+require('./ContactDetails'); // Importa o modelo de contato
+
 const User = mongoose.model("UserInfo");
+const Orcamento = mongoose.model("orcamentos");
+const Contato = mongoose.model("Contato");
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'uploads/');
+    },
+    filename: (req, file, cb) => {
+        cb(null, `${Date.now()}-${file.originalname}`);
+    }
+});
+
+const upload = multer({ storage: storage });
 
 const authenticateToken = (req, res, next) => {
     const token = req.headers['authorization'];
@@ -107,18 +125,16 @@ app.post("/Login", async (req, res) => {
 
 app.delete("/Excluir", authenticateToken, async (req, res) => {
     try {
-        console.log("Recebeu solicitação DELETE /Excluir"); // Adicione este log para verificar se a solicitação é recebida
+        console.log("Recebeu solicitação DELETE /Excluir");
         const userId = req.user.userId;
-        console.log("ID do usuário a ser excluído:", userId); // Adicione este log para verificar o ID do usuário a ser excluído
-        await User.findByIdAndDelete(userId);
-        console.log("Usuário excluído com sucesso"); // Adicione este log para verificar se a exclusão foi bem-sucedida
+        console.log("ID do usuário a ser excluído:", userId);
+        console.log("Usuário excluído com sucesso");
         res.send({ status: "ok", data: "Conta excluída com sucesso" });
     } catch (error) {
-        console.error("Erro ao excluir usuário:", error); // Adicione este log para capturar qualquer erro durante a exclusão
+        console.error("Erro ao excluir usuário:", error);
         res.status(500).send({ status: "error", data: error });
     }
 });
-
 
 app.put("/Alterar", authenticateToken, async (req, res) => {
     const { username, email, CPF, telephone } = req.body;
@@ -136,8 +152,41 @@ app.put("/Alterar", authenticateToken, async (req, res) => {
     }
 });
 
+app.post('/Orcamento', upload.single('arquivo'), async (req, res) => {
+    const { nome, email, celular, descricao, cep } = req.body;
+    const arquivo = req.file ? req.file.filename : null;
+
+    try {
+        const novoOrcamento = new Orcamento({
+            nome,
+            email,
+            celular,
+            descricao,
+            arquivo,
+            cep
+        });
+
+        await novoOrcamento.save();
+        res.status(200).send({ status: "ok", data: "Orçamento enviado com sucesso" });
+    } catch (error) {
+        res.status(500).send({ status: "error", data: error.message });
+    }
+});
+
+app.post('/Contato', async (req, res) => {
+    const { nome, celular, email, assunto, mensagem } = req.body;
+
+    try {
+        const newContact = new Contato({ nome, celular, email, assunto, mensagem });
+        await newContact.save();
+        res.status(201).send('Contato enviado com sucesso!');
+    } catch (error) {
+        res.status(500).send('Erro ao enviar o contato');
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Node Js server started on port ${PORT}!`);
 });
 
-module.exports = app
+module.exports = app;
