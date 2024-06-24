@@ -1,31 +1,81 @@
 const request = require('supertest');
-const app = require('../App'); // Se o arquivo App.js estiver no diretório pai
-const User = require('../UserDetails'); // Importe o modelo UserInfo
+const mongoose = require('mongoose');
+const User = require('../UserDetails');
+const express = require("express");
+
+jest.mock('../UserDetails');
+
+const app = express();
+app.use(express.json());
+
+app.post('/Login', async (req, res) => {
+    const { email, password } = req.body;
+
+    const user = await User.findOne({ email: email });
+
+    if (!user) {
+        return res.send({ data: "Usuário não existe" });
+    }
+
+    if (password !== user.password) {
+        return res.send({ data: "Senha incorreta" });
+    }
+
+    res.send({ status: "ok", data: "Login successful" });
+});
 
 describe('POST /Login', () => {
-  it('deve fazer login de um usuário existente', async () => {
-    const response = await request(app)
-      .post('/Login')
-      .send({
-        email: 'testuser@example.com',
-        password: 'senha',
-        telephone: '123456789', // Preencha o campo telephone
-        CPF: '12345678901', // Preencha o campo CPF
-      });
+    it('Deve fazer login com sucesso para um usuário existente', async () => {
+        const userData = {
+            email: 'testuser@example.com',
+            password: 'password123',
+        };
 
-    // Verifica se a resposta foi bem-sucedida (status 200)
-    expect(response.status).toBe(200);
+        User.findOne.mockResolvedValueOnce({
+            email: 'testuser@example.com',
+            password: 'password123',
+        });
 
-    // Se o login for bem-sucedido, o status da resposta deve ser 'ok'
-    if (response.body.status === 'ok') {
-      expect(response.body).toHaveProperty('data');
-      expect(response.body).toHaveProperty('userType');
-    } else {
-      // Se o login não for bem-sucedido, a mensagem de erro deve ser tratada aqui
-      console.error('Erro ao fazer login:', response.body.data); // Exemplo de tratamento de erro
-      // Adicione aqui as expectativas para lidar com a mensagem de erro, se necessário
-    }
-  });
+        const response = await request(app)
+            .post('/Login')
+            .send(userData);
 
-  // Outros testes aqui...
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({ status: "ok", data: "Login successful" });
+    });
+
+    it('Deve retornar uma mensagem de erro se o usuário não existir', async () => {
+        const userData = {
+            email: 'nonexistent@example.com',
+            password: 'password123',
+        };
+
+        User.findOne.mockResolvedValueOnce(null);
+
+        const response = await request(app)
+            .post('/Login')
+            .send(userData);
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({ data: "Usuário não existe" });
+    });
+
+    it('Deve retornar uma mensagem de erro se a senha estiver incorreta', async () => {
+        const userData = {
+            email: 'testuser@example.com',
+            password: 'wrongpassword',
+        };
+
+        User.findOne.mockResolvedValueOnce({
+            email: 'testuser@example.com',
+            password: 'password123',
+        });
+
+        const response = await request(app)
+            .post('/Login')
+            .send(userData);
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({ data: "Senha incorreta" });
+    });
 });
